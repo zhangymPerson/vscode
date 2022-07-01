@@ -41,7 +41,7 @@ import { IsWebContext } from 'vs/platform/contextkey/common/contextkeys';
 import { isProposedApiEnabled } from 'vs/workbench/services/extensions/common/extensions';
 
 registerSingleton(ISessionSyncWorkbenchService, SessionSyncWorkbenchService);
-
+export const thing = 4;
 const resumeLatestCommand = {
 	id: 'workbench.experimental.editSessions.actions.resumeLatest',
 	title: { value: localize('resume latest', "Resume Latest Edit Session"), original: 'Resume Latest Edit Session' },
