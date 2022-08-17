@@ -56,7 +56,7 @@ import { SelectionClipboardContributionID } from 'vs/workbench/contrib/codeEdito
 import { ContextMenuController } from 'vs/editor/contrib/contextmenu/browser/contextmenu';
 import * as platform from 'vs/base/common/platform';
 import { compare, format } from 'vs/base/common/strings';
-import { inputPlaceholderForeground, inputValidationInfoBorder, inputValidationWarningBorder, inputValidationErrorBorder, inputValidationInfoBackground, inputValidationInfoForeground, inputValidationWarningBackground, inputValidationWarningForeground, inputValidationErrorBackground, inputValidationErrorForeground, inputBackground, inputForeground, inputBorder, focusBorder, registerColor, contrastBorder, editorSelectionBackground, selectionBackground, textLinkActiveForeground, textLinkForeground } from 'vs/platform/theme/common/colorRegistry';
+import { inputPlaceholderForeground, inputValidationInfoBorder, inputValidationWarningBorder, inputValidationErrorBorder, inputValidationInfoBackground, inputValidationInfoForeground, inputValidationWarningBackground, inputValidationWarningForeground, inputValidationErrorBackground, inputValidationErrorForeground, inputBackground, inputForeground, inputBorder, focusBorder, registerColor, contrastBorder, editorSelectionBackground, selectionBackground, textLinkActiveForeground, textLinkForeground, buttonBorder } from 'vs/platform/theme/common/colorRegistry';
 import { SuggestController } from 'vs/editor/contrib/suggest/browser/suggestController';
 import { SnippetController2 } from 'vs/editor/contrib/snippet/browser/snippetController2';
 import { Schemas } from 'vs/base/common/network';
@@ -1788,8 +1788,8 @@ class SCMInputWidget {
 		}
 
 		const uri = URI.from({
-			scheme: Schemas.vscode,
-			path: `scm/${input.repository.provider.contextValue}/${input.repository.provider.id}/input`,
+			scheme: Schemas.vscodeSourceControl,
+			path: `${input.repository.provider.contextValue}/${input.repository.provider.id}/input`,
 			query
 		});
 
@@ -1963,7 +1963,7 @@ class SCMInputWidget {
 			scrollbar: { alwaysConsumeMouseWheel: false },
 			overflowWidgetsDomNode,
 			renderWhitespace: 'none',
-			enableDropIntoEditor: true,
+			dropIntoEditor: { enabled: true },
 			accessibilitySupport
 		};
 
@@ -2400,6 +2400,7 @@ export class SCMViewPane extends ViewPane {
 
 			if (widget) {
 				widget.focus();
+				this.tree.setFocus([], e.browserEvent);
 
 				const selection = this.tree.getSelection();
 
@@ -2411,7 +2412,13 @@ export class SCMViewPane extends ViewPane {
 			return;
 		} else if (isSCMActionButton(e.element)) {
 			this.scmViewService.focus(e.element.repository);
-			this.actionButtonRenderer.focusActionButton(e.element);
+
+			// Focus the action button
+			const target = e.browserEvent?.target as HTMLElement;
+			if (target.classList.contains('monaco-tl-row') || target.classList.contains('button-container')) {
+				this.actionButtonRenderer.focusActionButton(e.element);
+				this.tree.setFocus([], e.browserEvent);
+			}
 
 			return;
 		}
@@ -2441,13 +2448,12 @@ export class SCMViewPane extends ViewPane {
 		if (!e.element) {
 			const menu = this.menuService.createMenu(Menus.ViewSort, this.contextKeyService);
 			const actions: IAction[] = [];
-			const disposable = createAndFillInContextMenuActions(menu, undefined, actions);
+			createAndFillInContextMenuActions(menu, undefined, actions);
 
 			return this.contextMenuService.showContextMenu({
 				getAnchor: () => e.anchor,
 				getActions: () => actions,
 				onHide: () => {
-					disposable.dispose();
 					menu.dispose();
 				}
 			});
@@ -2456,33 +2462,32 @@ export class SCMViewPane extends ViewPane {
 		const element = e.element;
 		let context: any = element;
 		let actions: IAction[] = [];
-		let disposable: IDisposable = Disposable.None;
 
 		if (isSCMRepository(element)) {
 			const menus = this.scmViewService.menus.getRepositoryMenus(element.provider);
 			const menu = menus.repositoryMenu;
 			context = element.provider;
-			[actions, disposable] = collectContextMenuActions(menu);
+			actions = collectContextMenuActions(menu);
 		} else if (isSCMInput(element) || isSCMActionButton(element)) {
 			// noop
 		} else if (isSCMResourceGroup(element)) {
 			const menus = this.scmViewService.menus.getRepositoryMenus(element.provider);
 			const menu = menus.getResourceGroupMenu(element);
-			[actions, disposable] = collectContextMenuActions(menu);
+			actions = collectContextMenuActions(menu);
 		} else if (ResourceTree.isResourceNode(element)) {
 			if (element.element) {
 				const menus = this.scmViewService.menus.getRepositoryMenus(element.element.resourceGroup.provider);
 				const menu = menus.getResourceMenu(element.element);
-				[actions, disposable] = collectContextMenuActions(menu);
+				actions = collectContextMenuActions(menu);
 			} else {
 				const menus = this.scmViewService.menus.getRepositoryMenus(element.context.provider);
 				const menu = menus.getResourceFolderMenu(element.context);
-				[actions, disposable] = collectContextMenuActions(menu);
+				actions = collectContextMenuActions(menu);
 			}
 		} else {
 			const menus = this.scmViewService.menus.getRepositoryMenus(element.resourceGroup.provider);
 			const menu = menus.getResourceMenu(element);
-			[actions, disposable] = collectContextMenuActions(menu);
+			actions = collectContextMenuActions(menu);
 		}
 
 		const actionRunner = new RepositoryPaneActionRunner(() => this.getSelectedResources());
@@ -2492,10 +2497,7 @@ export class SCMViewPane extends ViewPane {
 			getAnchor: () => e.anchor,
 			getActions: () => actions,
 			getActionsContext: () => context,
-			actionRunner,
-			onHide() {
-				disposable.dispose();
-			}
+			actionRunner
 		});
 	}
 
@@ -2548,6 +2550,9 @@ registerThemingParticipant((theme, collector) => {
 	if (panelInputBorder) {
 		collector.addRule(`.monaco-workbench .part.panel .scm-view .scm-editor-container { outline: 1px solid ${panelInputBorder}; }`);
 	}
+
+	const buttonBorderColor = theme.getColor(buttonBorder);
+	collector.addRule(`.scm-view .button-container > .monaco-description-button { height: ${buttonBorderColor ? '32px' : '30px'}; }`);
 
 	const focusBorderColor = theme.getColor(focusBorder);
 	if (focusBorderColor) {
@@ -2637,19 +2642,11 @@ export class SCMActionButton implements IDisposable {
 			return;
 		}
 
-		const executeButtonAction = async (commandId: string, ...args: any[]) => {
-			try {
-				await this.commandService.executeCommand(commandId, ...args);
-			} catch (ex) {
-				this.notificationService.error(ex);
-			}
-		};
-
 		if (button.secondaryCommands?.length) {
 			const actions: IAction[] = [];
 			for (let index = 0; index < button.secondaryCommands.length; index++) {
 				for (const command of button.secondaryCommands[index]) {
-					actions.push(new Action(command.id, command.title, undefined, true, async () => await executeButtonAction(command.id, ...(command.arguments || []))));
+					actions.push(new Action(command.id, command.title, undefined, true, async () => await this.executeCommand(command.id, ...(command.arguments || []))));
 				}
 				if (index !== button.secondaryCommands.length - 1) {
 					actions.push(new Separator());
@@ -2661,6 +2658,7 @@ export class SCMActionButton implements IDisposable {
 				actions: actions,
 				addPrimaryActionToDropdown: false,
 				contextMenuProvider: this.contextMenuService,
+				title: button.command.tooltip,
 				supportIcons: true
 			});
 		} else if (button.description) {
@@ -2674,8 +2672,7 @@ export class SCMActionButton implements IDisposable {
 
 		this.button.enabled = button.enabled;
 		this.button.label = button.command.title;
-		this.button.element.title = button.command.tooltip ?? '';
-		this.button.onDidClick(async () => await executeButtonAction(button.command.id, ...(button.command.arguments || [])), null, this.disposables.value);
+		this.button.onDidClick(async () => await this.executeCommand(button.command.id, ...(button.command.arguments || [])), null, this.disposables.value);
 
 		this.disposables.value!.add(this.button);
 		this.disposables.value!.add(attachButtonStyler(this.button, this.themeService));
@@ -2689,5 +2686,13 @@ export class SCMActionButton implements IDisposable {
 		this.disposables.value = new DisposableStore();
 		this.button = undefined;
 		clearNode(this.container);
+	}
+
+	private async executeCommand(commandId: string, ...args: any[]): Promise<void> {
+		try {
+			await this.commandService.executeCommand(commandId, ...args);
+		} catch (ex) {
+			this.notificationService.error(ex);
+		}
 	}
 }
